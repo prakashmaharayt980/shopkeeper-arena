@@ -11,6 +11,7 @@ import Customers from "./pages/Customers";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import DeliveryStatus from "./pages/DeliveryStatus";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/orders" element={<Orders />} />
           <Route path="/products" element={<Products />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/delivery-status" element={<DeliveryStatus />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

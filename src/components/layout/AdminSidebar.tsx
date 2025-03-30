@@ -7,7 +7,8 @@ import {
   Users, 
   Home, 
   Settings,
-  LogOut
+  LogOut,
+  Truck
 } from 'lucide-react';
 import { 
   Sidebar, 
@@ -33,6 +34,7 @@ const AdminSidebar = () => {
     { title: 'Orders', icon: ShoppingCart, path: '/orders' },
     { title: 'Products', icon: Package, path: '/products' },
     { title: 'Customers', icon: Users, path: '/customers' },
+    { title: 'Delivery Status', icon: Truck, path: '/delivery-status' },
     { title: 'Settings', icon: Settings, path: '/settings' },
   ];
 
