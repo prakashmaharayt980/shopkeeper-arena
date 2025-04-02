@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import RemoteServices from '@/RemoteService/Remoteservice';
 
 const Login = () => {
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -20,17 +21,25 @@ const Login = () => {
     
     // Simulate login - in a real app, this would be an API call
     setTimeout(() => {
-      // Demo credentials for easy testing
-      if (email === 'admin@example.com' && password === 'password') {
-        localStorage.setItem('isLoggedIn', 'true');
-        navigate('/');
-      } else {
-        toast({
-          title: "Login Failed",
-          description: "Invalid email or password. Try admin@example.com / password",
-          variant: "destructive"
-        });
-      }
+         RemoteServices.loginPost({ email, password })
+         .then((response) => {
+          // Store tokens
+          console.log('Login response:', response);
+          if(response.status === 200) {
+            localStorage.setItem('token', response.data.access);
+            localStorage.setItem('refresh_token', response.data.refresh);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+            navigate('/');
+          }
+         }).catch((error) => {
+          console.error('Login error:', error);
+          toast({
+            title: "Login Failed",
+            description: "Invalid email or password. Please try again.",
+            variant: "destructive"
+          });
+         });
+  
       setIsLoading(false);
     }, 800);
   };

@@ -13,7 +13,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   
   // Check if user is logged in (simplified - you would use a real auth check)
-  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  const isLoggedIn = localStorage.getItem('token') !== null 
   
   React.useEffect(() => {
     if (!isLoggedIn) {
