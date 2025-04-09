@@ -1,17 +1,21 @@
-
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Package,
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
   CreditCard,
-  Clock,
   Search,
   ChevronLeft,
   ChevronRight,
   Truck,
-  User,
-  Bell
+  Bell,
+  Download,
+  Filter,
+  Eye,
+  ChevronDown,
+  ChevronUp,
+  Users,
+  Package,
+  ClipboardList
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -25,65 +29,102 @@ import {
 } from "@/components/ui/select";
 import OrderCustomerDetails from '@/components/orders/OrderCustomerDetails';
 import { useToast } from '@/hooks/use-toast';
-
-// Mock data with expanded customer information
-const orders = Array.from({ length: 50 }).map((_, i) => ({
-  id: `ORD-${1000 + i}`,
-  customer: `Customer ${i + 1}`,
-  customerId: `CUST-${2000 + i}`,
-  email: `customer${i + 1}@example.com`,
-  phone: `+1 555-${100 + i}-${1000 + i}`,
-  address: `${i + 123} Main St, City ${i % 10 + 1}, State ${i % 5 + 1}, 10${i % 10}${i % 9}${i % 8}`,
-  date: new Date(Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)).toLocaleDateString(),
-  status: ['pending', 'processing', 'delivered', 'cancelled'][Math.floor(Math.random() * 4)],
-  amount: `$${(Math.random() * 500 + 20).toFixed(2)}`,
-  paymentMethod: Math.random() > 0.5 ? 'Credit Card' : 'PayPal',
-  notes: Math.random() > 0.7 ? 'Gift package requested' : '',
-  deliveryStatus: ['waiting', 'shipped', 'delivered', 'returned'][Math.floor(Math.random() * 4)]
-}));
+import RemoteServices from '@/RemoteService/Remoteservice';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const Orders = () => {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
+  const [expandedOrder, setExpandedOrder] = useState(null);
   const { toast } = useToast();
 
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        const res = await RemoteServices.AdminOrderView();
+        if (res.status === 200) {
+          setOrders(res.data);
+          // customerId(res.data.userid);
+        } else {
+          toast({
+            variant: "destructive",
+            title: "Failed to load orders",
+            description: "Please try again or contact support if the problem persists.",
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        toast({
+          variant: "destructive",
+          title: "Connection error",
+          description: "We couldn't connect to the server. Please check your connection.",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [toast]);
+
   const ordersPerPage = 10;
-  
-  // Filter orders based on search and status filter
+
   const filteredOrders = orders.filter(order => {
-    const matchesSearch = search === '' || 
-      order.id.toLowerCase().includes(search.toLowerCase()) ||
-      order.customer.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesFilter = filter === 'all' || order.status === filter;
-    
+    const matchesSearch =
+      search === '' ||
+      order.id.toString().toLowerCase().includes(search.toLowerCase()) ||
+      order.shipping_address.toLowerCase().includes(search.toLowerCase());
+
+    const matchesFilter =
+      filter === 'all' || order.delivery_method.toLowerCase() === filter;
+
     return matchesSearch && matchesFilter;
   });
-  
-  // Pagination
+
   const totalPages = Math.ceil(filteredOrders.length / ordersPerPage);
   const indexOfLastOrder = currentPage * ordersPerPage;
   const indexOfFirstOrder = indexOfLastOrder - ordersPerPage;
   const currentOrders = filteredOrders.slice(indexOfFirstOrder, indexOfLastOrder);
-  
-  const handlePageChange = (pageNumber: number) => {
+
+  const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
   };
 
-  const handleViewCustomer = (order: any) => {
-    setSelectedCustomer({
-      id: order.customerId,
-      name: order.customer,
-      email: order.email,
-      phone: order.phone,
-      address: order.address,
-      orderId: order.id,
-      orderDate: order.date,
-      paymentMethod: order.paymentMethod
-    });
+  const handleViewCustomer = (order) => {
+    RemoteServices.CustomerById(order.user).then((res) => {
+      if (res.status === 200) {
+        setSelectedCustomer({
+          id: res.data.id,
+          name: res.data.name,
+          email: res.data.email || 'Not provided',
+          phone: res.data.phone_number || 'Not provided',
+          address: res.data.address || 'Not provided',
+          orderId: order.id,
+          orderDate: order.created_at,
+          paymentMethod: order.payment_method,
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Failed to load customer details",
+          description: "Please try again or contact support if the problem persists.",
+        });
+      }
+    }
+
+    );
     setShowCustomerDetails(true);
   };
 
@@ -91,219 +132,420 @@ const Orders = () => {
     setShowCustomerDetails(false);
   };
 
-  const handleSendNotification = (order: any) => {
-    // In a real app, this would call an API to send a notification
+  const handleSendNotification = (order) => {
     toast({
       title: "Notification sent",
-      description: `Delivery update sent to ${order.customer} (${order.email})`,
+      description: `Delivery update sent for Order #${order.id}`,
     });
   };
 
-  const handleUpdateDeliveryStatus = (order: any, newStatus: string) => {
-    // In a real app, this would call an API to update the status
-    toast({
-      title: "Delivery status updated",
-      description: `Order ${order.id} delivery status changed to ${newStatus}`,
+  const handlestatusProduct = (order, newMethod) => {
+    console.log("Order ID:", order.id);
+    console.log("New Delivery Method:", newMethod);
+
+    RemoteServices.updatestatus({status:newMethod}, order.id).then((res) => {  
+      if (res.status === 200) {
+        toast({
+          title: "Order status updated",
+          description: `Order #${order.id} updated to ${newMethod}`,
+        });
+        setOrders(prevOrders =>
+          prevOrders.map(o => (o.id === order.id ? { ...o, status: newMethod } : o))
+        );
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Failed to update order status",
+          description: "Please try again or contact support if the problem persists.",
+        });
+      }
     });
   };
-  
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return <Badge className="bg-success/20 text-success">Delivered</Badge>;
-      case 'processing':
-        return <Badge className="bg-pending/20 text-pending">Processing</Badge>;
-      case 'pending':
-        return <Badge className="bg-warning/20 text-warning">Pending</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-destructive/20 text-destructive">Cancelled</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+
+  const toggleExpandOrder = (orderId) => {
+    if (expandedOrder === orderId) {
+      setExpandedOrder(null);
+    } else {
+      setExpandedOrder(orderId);
     }
   };
 
-  const getDeliveryStatusBadge = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return <Badge className="bg-success/20 text-success">Delivered</Badge>;
-      case 'shipped':
-        return <Badge className="bg-blue-500/20 text-blue-500">Shipped</Badge>;
-      case 'waiting':
-        return <Badge className="bg-orange-500/20 text-orange-500">Waiting</Badge>;
-      case 'returned':
-        return <Badge className="bg-red-500/20 text-red-500">Returned</Badge>;
+  const getDeliveryBadge = (method) => {
+    switch (method.toLowerCase()) {
+      case 'express':
+        return <Badge className="bg-blue-500/20 text-blue-500 hover:bg-blue-500/30 transition-colors">Express</Badge>;
+      case 'standard':
+        return <Badge className="bg-gray-500/20 text-gray-500 hover:bg-gray-500/30 transition-colors">Standard</Badge>;
+      case 'next_day':
+        return <Badge className="bg-green-500/20 text-green-500 hover:bg-green-500/30 transition-colors">Next Day</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline">{method}</Badge>;
     }
   };
-  
+
+  const getPaymentIcon = (method) => {
+    switch (method.toLowerCase()) {
+      case 'cash':
+        return <CreditCard className="mr-2 h-4 w-4 text-yellow-500" />;
+      case 'credit_card':
+        return <CreditCard className="mr-2 h-4 w-4 text-blue-500" />;
+      case 'paypal':
+        return <CreditCard className="mr-2 h-4 w-4 text-indigo-500" />;
+      default:
+        return <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Orders</h1>
-          <Button>Export Orders</Button>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Orders Management</h1>
+            <p className="text-muted-foreground mt-1">View and manage customer orders</p>
+          </div>
+          <Button className="flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Export Orders
+          </Button>
         </div>
-        
+
+        <Separator />
+
         <div className="flex flex-col sm:flex-row gap-4 pb-6">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search orders..."
+              placeholder="Search by order ID or address..."
               className="w-full pl-8"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Filter by status" />
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                <SelectValue placeholder="Delivery method" />
+              </div>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Orders</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="delivered">Delivered</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="all">All delivery methods</SelectItem>
+              <SelectItem value="express">Express delivery</SelectItem>
+              <SelectItem value="standard">Standard delivery</SelectItem>
+              <SelectItem value="next_day">Next day delivery</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Order List</CardTitle>
+
+        <Card className="shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xl">Order List</CardTitle>
+            <CardDescription>
+              {filteredOrders.length} orders found
+              {search && ` matching "${search}"`}
+              {filter !== 'all' && ` with ${filter} delivery`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead>
-                  <tr>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Delivery</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
-                    <th className="table-cell-padding text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {currentOrders.map(order => (
-                    <tr key={order.id} className="hover:bg-muted/50">
-                      <td className="table-cell-padding whitespace-nowrap">{order.id}</td>
-                      <td className="table-cell-padding">{order.customer}</td>
-                      <td className="table-cell-padding">{order.date}</td>
-                      <td className="table-cell-padding">{getStatusBadge(order.status)}</td>
-                      <td className="table-cell-padding">{getDeliveryStatusBadge(order.deliveryStatus)}</td>
-                      <td className="table-cell-padding font-medium">{order.amount}</td>
-                      <td className="table-cell-padding">
-                        <div className="flex items-center">
-                          {order.paymentMethod === 'Credit Card' ? (
-                            <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <Package className="mr-2 h-4 w-4 text-muted-foreground" />
-                          )}
-                          {order.paymentMethod}
-                        </div>
-                      </td>
-                      <td className="table-cell-padding">
-                        {order.notes && (
-                          <span className="text-sm text-muted-foreground">{order.notes}</span>
-                        )}
-                      </td>
-                      <td className="table-cell-padding">
-                        <div className="flex space-x-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => handleViewCustomer(order)}
-                          >
-                            <User className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleUpdateDeliveryStatus(
-                              order,
-                              order.deliveryStatus === 'waiting' ? 'shipped' : 'delivered'
+            {loading ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((_, i) => (
+                  <div key={i} className="flex gap-4 items-center">
+                    <Skeleton className="h-12 w-12 rounded-md" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-[250px]" />
+                      <Skeleton className="h-4 w-[200px]" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div>
+                {currentOrders.length > 0 ? (
+                  <div className="space-y-4">
+                    {currentOrders.map(order => (
+                      <Card key={order.id} className={`overflow-hidden border ${expandedOrder === order.id ? 'border-primary/50 shadow-md' : 'border-border'}`}>
+                        <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50" onClick={() => toggleExpandOrder(order.id)}>
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                              <Package className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <div className="font-medium">Order #{order.id}</div>
+                              <div className="text-sm text-muted-foreground">
+                                {formatDate(order.created_at)} · 
+                                {getDeliveryBadge(order.delivery_method)} · 
+                                {formatCurrency(order.total_amount)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="hidden md:flex gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewCustomer(order);
+                                }}
+                                className="flex items-center gap-1"
+                              >
+                                <Users className="h-3.5 w-3.5" />
+                                <span>Customer</span>
+                              </Button>
+                              {/* <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlestatusProduct(
+                                    order,
+                                   
+                                  );
+                                }}
+                              >
+                                <Truck className="h-4 w-4" />
+                              </Button> */}
+
+                              <Select 
+                                onValueChange={(value) => handlestatusProduct(order, value)}
+                                defaultValue={order.status}
+                              >
+                                <SelectTrigger className="w-[130px]">
+                                  <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">Pending</SelectItem>
+                                  <SelectItem value="cancel">Cancel</SelectItem>
+                                  <SelectItem value="processing">Processing</SelectItem>
+                                  <SelectItem value="completed">Completed</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendNotification(order);
+                                }}
+                              >
+                                <Bell className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {expandedOrder === order.id ? (
+                              <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-5 w-5 text-muted-foreground" />
                             )}
-                          >
-                            <Truck className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleSendNotification(order)}
-                          >
-                            <Bell className="h-4 w-4" />
-                          </Button>
+                          </div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
+                        
+                        {expandedOrder === order.id && (
+                          <div className="p-4 pt-0 border-t">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                              <div className="space-y-2">
+                                <h4 className="text-sm font-medium flex items-center gap-2">
+                                  <Users className="h-4 w-4" /> Customer Information
+                                </h4>
+                                <div className="bg-muted/50 p-3 rounded-md space-y-1">
+                                  <div className="text-sm">
+                                    <span className="font-medium">Address:</span> {order.shipping_address}
+                                  </div>
+                                  {order.email && (
+                                    <div className="text-sm">
+                                      <span className="font-medium">Email:</span> {order.email}
+                                    </div>
+                                  )}
+                                  {order.phone && (
+                                    <div className="text-sm">
+                                      <span className="font-medium">Phone:</span> {order.phone}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                <h4 className="text-sm font-medium flex items-center gap-2">
+                                  <Package className="h-4 w-4" /> Order Details
+                                </h4>
+                                <div className="bg-muted/50 p-3 rounded-md space-y-1">
+                                  <div className="text-sm">
+                                    <span className="font-medium">Order Date:</span> {formatDate(order.created_at)}
+                                  </div>
+                                  <div className="text-sm">
+                                    <span className="font-medium">Delivery Method:</span> {order.delivery_method}
+                                  </div>
+                                  <div className="text-sm">
+                                    <span className="font-medium">Payment Method:</span> 
+                                    <span className="flex items-center gap-1 inline-flex ml-1">
+                                      {getPaymentIcon(order.payment_method)}
+                                      <span>{order.payment_method.replace('_', ' ')}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                <h4 className="text-sm font-medium flex items-center gap-2">
+                                  <CreditCard className="h-4 w-4" /> Payment Summary
+                                </h4>
+                                <div className="bg-muted/50 p-3 rounded-md space-y-1">
+                                  <div className="text-sm">
+                                    <span className="font-medium">Subtotal:</span> {formatCurrency(order.subtotal)}
+                                  </div>
+                                  <div className="text-sm">
+                                    <span className="font-medium">Shipping Cost:</span> {formatCurrency(order.shipping_cost)}
+                                  </div>
+                                  <div className="text-sm font-medium">
+                                    <span>Total Amount:</span> {formatCurrency(order.total_amount)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {order.notes && (
+                              <div className="space-y-2 mt-4">
+                                <h4 className="text-sm font-medium flex items-center gap-2">
+                                  <ClipboardList className="h-4 w-4" /> Notes
+                                </h4>
+                                <div className="bg-muted/50 p-3 rounded-md">
+                                  <p className="text-sm">{order.notes}</p>
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="flex justify-end mt-4 md:hidden">
+                              <div className="flex gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => handleViewCustomer(order)}
+                                >
+                                  <Users className="h-3.5 w-3.5 mr-1" />
+                                  <span>Customer</span>
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() =>
+                                    handlestatusProduct(
+                                      order,
+                                      order.delivery_method === 'express' ? 'standard' : 'express'
+                                    )
+                                  }
+                                >
+                                  <Truck className="h-4 w-4 mr-1" />
+                                  <span>Update Delivery</span>
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleSendNotification(order)}
+                                >
+                                  <Bell className="h-4 w-4 mr-1" />
+                                  <span>Notify</span>
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-10 text-center text-muted-foreground">
+                    <Package className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                    <h3 className="text-lg font-medium">No orders found</h3>
+                    <p className="mt-1">Try adjusting your search or filter settings</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Pagination */}
-            <div className="flex items-center justify-between space-x-6 mt-6">
-              <div className="text-sm text-muted-foreground">
-                Showing <span className="font-medium">{Math.min(filteredOrders.length, indexOfFirstOrder + 1)}</span> to{" "}
-                <span className="font-medium">{Math.min(filteredOrders.length, indexOfLastOrder)}</span> of{" "}
-                <span className="font-medium">{filteredOrders.length}</span> orders
-              </div>
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="flex items-center space-x-1">
-                  {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
-                    // Simple pagination display logic
-                    let pageToShow;
-                    if (totalPages <= 5) {
-                      pageToShow = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageToShow = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageToShow = totalPages - 4 + i;
-                    } else {
-                      pageToShow = currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <Button
-                        key={i}
-                        variant={currentPage === pageToShow ? "default" : "outline"}
-                        size="icon"
-                        onClick={() => handlePageChange(pageToShow)}
-                      >
-                        {pageToShow}
-                      </Button>
-                    );
-                  })}
+            {!loading && filteredOrders.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+                <div className="text-sm text-muted-foreground">
+                  Showing{' '}
+                  <span className="font-medium">
+                    {Math.min(filteredOrders.length, indexOfFirstOrder + 1)}
+                  </span>{' '}
+                  to{' '}
+                  <span className="font-medium">
+                    {Math.min(filteredOrders.length, indexOfLastOrder)}
+                  </span>{' '}
+                  of{' '}
+                  <span className="font-medium">{filteredOrders.length}</span> orders
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
+                      let pageToShow;
+                      if (totalPages <= 5) {
+                        pageToShow = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageToShow = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageToShow = totalPages - 4 + i;
+                      } else {
+                        pageToShow = currentPage - 2 + i;
+                      }
+                      return (
+                        <Button
+                          key={i}
+                          variant={currentPage === pageToShow ? "default" : "outline"}
+                          size="icon"
+                          onClick={() => handlePageChange(pageToShow)}
+                          aria-label={`Page ${pageToShow}`}
+                          aria-current={currentPage === pageToShow ? "page" : undefined}
+                        >
+                          {pageToShow}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Customer Details Modal */}
+      {/* Customer Details Modal - Now used only for additional customer details */}
       {selectedCustomer && (
         <OrderCustomerDetails 
           open={showCustomerDetails} 

@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { EditProductDialog } from '@/components/products/EditProductDialog';
 import RemoteServices from '@/RemoteService/Remoteservice';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // Define product interface for better type safety
 interface Product {
@@ -44,6 +45,7 @@ const Products = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [deleteProduct, setDeleteProduct] = useState<Product | null>(null);
   
   const { toast } = useToast();
   
@@ -114,6 +116,7 @@ const Products = () => {
         title: 'Product deleted',
         description: 'Product has been removed successfully.',
       });
+      setDeleteProduct(null);
     } catch (error) {
       console.error('Error deleting product:', error);
       toast({
@@ -298,11 +301,7 @@ const Products = () => {
                     variant="ghost" 
                     size="icon"
                     className="text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-                    onClick={() => {
-                      if (window.confirm(`Are you sure you want to delete "${product.name}"?`)) {
-                        handleDeleteProduct(product.id);
-                      }
-                    }}
+                    onClick={() => setDeleteProduct(product)}
                   >
                     <Trash className="h-4 w-4" />
                     <span className="sr-only">Delete</span>
@@ -435,6 +434,32 @@ const Products = () => {
           onSave={handleProductSave}
         />
       )}
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteProduct} onOpenChange={(open) => !open && setDeleteProduct(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Product</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{deleteProduct?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteProduct(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteProduct && handleDeleteProduct(deleteProduct.id)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

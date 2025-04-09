@@ -29,7 +29,13 @@ import { Loader2, X, Upload, Image as ImageIcon } from "lucide-react";
 const CATEGORY_OPTIONS = [
   'Electronics', 'Furniture', 'Clothing', 'Books', 'Flower',
   'Shoes', 'Toys', 'Sports', 'Beauty', 'Automotive',
-  'Health', 'Jewelry', 'Grocery', 'Stationery', 'Home Decor'
+  'Health', 'Jewelry', 'Grocery', 'Stationery', 'Home Decor',
+  'Plants', 'Painting', 'Handicraft', 'Kitchenware', 'Pet Supplies',
+  'Book'
+] as const;
+
+const GENRE_OPTIONS = [
+  'Fiction', 'Non-fiction', 'Biography', 'History', 'Science', 'Art', 'Other'
 ] as const;
 
 const RATING_OPTIONS = [
@@ -47,6 +53,8 @@ interface Product {
   description: string;
   price: string;
   category: string;
+  genre?: string;
+  author?: string;
   stock: number;
   status: string;
   rating: string;
@@ -55,7 +63,7 @@ interface Product {
 }
 
 interface EditProductDialogProps {
-  product: Product;
+  product: Partial<Product>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave?: (product: Product) => void;
@@ -68,7 +76,20 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
   onSave,
 }) => {
   // Initialize media as an array if not already provided
-  const initialProduct = { ...product, media: product.media || [] };
+  const initialProduct: Product = {
+    id: product.id || 0,
+    name: product.name || '',
+    description: product.description || '',
+    price: product.price || '',
+    category: product.category || '',
+    genre: product.genre || '',
+    author: product.author || '',
+    stock: product.stock || 0,
+    status: product.status || 'inactive',
+    rating: product.rating || '',
+    imageUrl: product.imageUrl || '',
+    media: product.media || [],
+  };
   const [formData, setFormData] = useState<Product>(initialProduct);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
@@ -127,13 +148,24 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Validation
-      if (!formData.name || !formData.price || !formData.category) {
+      // Enhanced validation
+      const requiredFields = ['name', 'price', 'category'] as const;
+      const missingFields = requiredFields.filter(field => !formData[field]);
+      
+      // Add conditional validation for books
+      if (formData.category === 'Books') {
+        if (!formData.author || !formData.genre) {
+          missingFields.push('author', 'genre' as any);
+        }
+      }
+
+      if (missingFields.length > 0) {
         toast({
           variant: 'destructive',
           title: 'Validation Error',
-          description: 'Please fill in all required fields.',
+          description: `Please fill in all required fields: ${missingFields.join(', ')}`,
         });
+        setIsSubmitting(false);
         return;
       }
 
@@ -181,6 +213,9 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
     }
   };
   
+  // Conditional rendering helper
+  const isBookCategory = formData.category === 'Books';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
@@ -266,6 +301,46 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Conditional fields for Books category */}
+                {isBookCategory && (
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="author" className="text-right">
+                        Author <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="author"
+                        name="author"
+                        value={formData.author}
+                        onChange={handleChange}
+                        className="col-span-3"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="genre" className="text-right">
+                        Genre <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={formData.genre}
+                        onValueChange={(value) => handleSelectChange('genre', value)}
+                      >
+                        <SelectTrigger className="col-span-3 w-full">
+                          <SelectValue placeholder="Select a genre" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GENRE_OPTIONS.map((genre) => (
+                            <SelectItem key={genre} value={genre}>
+                              {genre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
                 
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="stock" className="text-right">Stock</Label>
