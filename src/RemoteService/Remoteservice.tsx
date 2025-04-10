@@ -114,7 +114,7 @@ const RemoteServices = {
   },
   register: (data) => postRequest("auth/register/", data),
   
-  productAdd: (data) => postRequest("inventory/products/add/", data, true),
+  productAdd: (data) => postRequest("inventory/productAdd/", data, true),
   
   productList: () => getRequest("inventory/products/"),
   productUpdate: (data,id) => putRequest(`inventory/products/update/${id}/`, data, true),
