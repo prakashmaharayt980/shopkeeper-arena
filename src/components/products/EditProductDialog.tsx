@@ -46,20 +46,41 @@ const RATING_OPTIONS = [
   { value: '5', label: '5 Stars' },
 ] as const;
 
-// Update the Product interface so media is now an array of Files (or strings if coming from backend)
+const LANGUAGE_OPTIONS = [
+  'English', 'Nepali', 'Hindi', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Other'
+] as const;
+
+const AGE_RANGE_OPTIONS = [
+  'All Ages', 'Adults Only', '13+', '16+', '18+', 'Children', 'Toddlers'
+] as const;
+
+// Update the Product interface to match the JSON structure
+interface ProductMedia {
+  id?: string;
+  file?: string;
+  file_type?: string;
+  description?: string;
+}
+
 interface Product {
-  id: number;
+  id: string | number;
   name: string;
   description: string;
-  price: string;
-  category: string;
+  price: string | number;
+  discount?: number;
+  category?: string;
   genre?: string;
   author?: string;
   stock: number;
-  status: string;
-  rating: string;
-  imageUrl: string;
-  media: File[]; // store multiple files
+  status?: string;
+  rating: string | number;
+  image_url: string;
+  isNew?: boolean;
+  totalpage?: number;
+  language?: string;
+  madeinwhere?: string;
+  ageproduct?: string;
+  media: (File | ProductMedia)[];
 }
 
 interface EditProductDialogProps {
@@ -75,21 +96,33 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
   onOpenChange,
   onSave,
 }) => {
-  // Initialize media as an array if not already provided
+  // Convert the media from JSON format to the format expected by the component
+  const initialMedia = Array.isArray(product.media) 
+    ? product.media.map(item => typeof item === 'object' && 'file' in item ? item : item as File)
+    : [];
+
+  // Initialize with default values and product data
   const initialProduct: Product = {
-    id: product.id || 0,
+    id: product.id || '',
     name: product.name || '',
     description: product.description || '',
-    price: product.price || '',
+    price: product.price?.toString() || '',
+    discount: product.discount || 0,
     category: product.category || '',
     genre: product.genre || '',
     author: product.author || '',
     stock: product.stock || 0,
     status: product.status || 'inactive',
-    rating: product.rating || '',
-    imageUrl: product.imageUrl || '',
-    media: product.media || [],
+    rating: product.rating?.toString() || '',
+    image_url: product.image_url || '',
+    isNew: product.isNew || false,
+    totalpage: product.totalpage || 0,
+    language: product.language || '',
+    madeinwhere: product.madeinwhere || '',
+    ageproduct: product.ageproduct || '',
+    media: initialMedia,
   };
+
   const [formData, setFormData] = useState<Product>(initialProduct);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
@@ -101,21 +134,43 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
   // Create object URLs for previews
   useEffect(() => {
     // Clean up previous object URLs to avoid memory leaks
-    imagePreviews.forEach(url => URL.revokeObjectURL(url));
+    imagePreviews.forEach(url => {
+      // Only revoke URLs that were created by createObjectURL
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
     
-    // Create new object URLs
-    const urls = formData.media.map(file => URL.createObjectURL(file));
+    // Create new object URLs for File objects, use direct URLs for strings
+    const urls = formData.media.map(file => {
+      if (file instanceof File) {
+        return URL.createObjectURL(file);
+      } else if (typeof file === 'object' && 'file' in file) {
+        return file.file as string;
+      }
+      return '';
+    });
+    
     setImagePreviews(urls);
     
     // Cleanup function to revoke object URLs when component unmounts
     return () => {
-      urls.forEach(url => URL.revokeObjectURL(url));
+      urls.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
     };
   }, [formData.media]);
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: Number(value) }));
   };
   
   const handleSelectChange = (field: keyof Product, value: string) => {
@@ -126,10 +181,14 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
     setFormData(prev => ({ ...prev, status: checked ? 'active' : 'inactive' }));
   };
 
+  const handleIsNewChange = (checked: boolean) => {
+    setFormData(prev => ({ ...prev, isNew: checked }));
+  };
+
   // Handle multiple file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const filesArray = Array.from(e.target.files);
+      const filesArray = Array.from(e.target.files) as File[];
       setFormData(prev => ({ ...prev, media: [...prev.media, ...filesArray] }));
     }
   };
@@ -175,16 +234,23 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
       // Append basic fields
       Object.entries(formData).forEach(([key, value]) => {
         if (key !== 'media') {
-          productFormData.append(key, value.toString());
+          productFormData.append(key, value?.toString() || '');
         }
       });
 
       // Append media files
       formData.media.forEach((file, index) => {
-        productFormData.append(`media[${index}]`, file);
+        if (file instanceof File) {
+          productFormData.append(`media[${index}]`, file);
+        } else if (typeof file === 'object' && 'file' in file) {
+          productFormData.append(`media[${index}][id]`, file.id || '');
+          productFormData.append(`media[${index}][file]`, file.file || '');
+          productFormData.append(`media[${index}][file_type]`, file.file_type || 'image');
+          productFormData.append(`media[${index}][description]`, file.description || '');
+        }
       });
 
-      let response
+      let response;
       if(isNewProduct) {
         response = await RemoteServices.productAdd(productFormData);
       }
@@ -223,11 +289,16 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
           <DialogHeader>
             <DialogTitle className="text-xl">
               {isNewProduct ? 'Add New Product' : 'Edit Product'}
-              {!isNewProduct && (
-                <Badge variant={formData.status === 'active' ? 'default' : 'outline'} className="ml-2">
-                  {formData.status === 'active' ? 'Active' : 'Inactive'}
-                </Badge>
-              )}
+              <div className="inline-flex gap-2 ml-2">
+                {!isNewProduct && (
+                  <Badge variant={formData.status === 'active' ? 'default' : 'outline'}>
+                    {formData.status === 'active' ? 'Active' : 'Inactive'}
+                  </Badge>
+                )}
+                {formData.isNew && (
+                  <Badge variant="default" className="bg-green-500">New</Badge>
+                )}
+              </div>
             </DialogTitle>
             <DialogDescription>
               {isNewProduct 
@@ -237,10 +308,11 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
           </DialogHeader>
           
           <Tabs defaultValue="basic" value={activeTab} onValueChange={setActiveTab} className="mt-4">
-            <TabsList className="grid grid-cols-3 mb-4">
+            <TabsList className="grid grid-cols-4 mb-4">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="media">Media</TabsTrigger>
               <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="additional">Additional</TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic">
@@ -279,6 +351,20 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                       required
                     />
                   </div>
+                </div>
+                
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="discount" className="text-right">Discount (%)</Label>
+                  <Input
+                    id="discount"
+                    name="discount"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={formData.discount}
+                    onChange={handleNumberChange}
+                    className="col-span-3"
+                  />
                 </div>
                 
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -339,6 +425,19 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                         </SelectContent>
                       </Select>
                     </div>
+                    
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="totalpage" className="text-right">Total Pages</Label>
+                      <Input
+                        id="totalpage"
+                        name="totalpage"
+                        type="number"
+                        min="0"
+                        value={formData.totalpage}
+                        onChange={handleNumberChange}
+                        className="col-span-3"
+                      />
+                    </div>
                   </>
                 )}
                 
@@ -350,7 +449,7 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                     type="number"
                     min="0"
                     value={formData.stock}
-                    onChange={handleChange}
+                    onChange={handleNumberChange}
                     className="col-span-3"
                     required
                   />
@@ -375,12 +474,12 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                 <CardContent className="p-4">
                   {/* Image URL input */}
                   <div className="grid grid-cols-4 items-center gap-4 mb-4">
-                    <Label htmlFor="imageUrl" className="text-right">Image URL</Label>
+                    <Label htmlFor="image_url" className="text-right">Image URL</Label>
                     <Input
-                      id="imageUrl"
-                      name="imageUrl"
+                      id="image_url"
+                      name="image_url"
                       type="url"
-                      value={formData.imageUrl}
+                      value={formData.image_url}
                       onChange={handleChange}
                       className="col-span-3"
                       placeholder="https://example.com/image.jpg"
@@ -429,7 +528,7 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                                 <X className="h-4 w-4 text-red-600" />
                               </button>
                               <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                                {file.name}
+                                {file instanceof File ? file.name : ((file as ProductMedia).description || 'Image')}
                               </div>
                             </div>
                           </div>
@@ -438,7 +537,7 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                     </div>
                   )}
 
-                  {formData.media.length === 0 && formData.imageUrl === "" && (
+                  {formData.media.length === 0 && formData.image_url === "" && (
                     <div className="text-center p-6 bg-gray-50 rounded-lg">
                       <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
                       <p className="mt-2 text-sm text-gray-600">No images added yet</p>
@@ -465,9 +564,23 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                 </div>
                 
                 <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="isNew" className="text-right">Mark as New</Label>
+                  <div className="flex items-center space-x-2 col-span-3">
+                    <Switch
+                      id="isNew"
+                      checked={!!formData.isNew}
+                      onCheckedChange={handleIsNewChange}
+                    />
+                    <Label htmlFor="isNew" className="cursor-pointer">
+                      {formData.isNew ? 'Yes' : 'No'}
+                    </Label>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="rating" className="text-right">Rating</Label>
                   <Select
-                    value={formData.rating}
+                    value={formData.rating?.toString()}
                     onValueChange={(value) => handleSelectChange('rating', value)}
                   >
                     <SelectTrigger className="col-span-3 w-full">
@@ -481,6 +594,69 @@ export const EditProductDialog: React.FC<EditProductDialogProps> = ({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="language" className="text-right">Language</Label>
+                  <Select
+                    value={formData.language}
+                    onValueChange={(value) => handleSelectChange('language', value)}
+                  >
+                    <SelectTrigger className="col-span-3 w-full">
+                      <SelectValue placeholder="Select a language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.map((language) => (
+                        <SelectItem key={language} value={language}>
+                          {language}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="additional">
+              <div className="grid gap-4 py-2">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="madeinwhere" className="text-right">Made In</Label>
+                  <Input
+                    id="madeinwhere"
+                    name="madeinwhere"
+                    value={formData.madeinwhere}
+                    onChange={handleChange}
+                    className="col-span-3"
+                    placeholder="Country of origin"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="ageproduct" className="text-right">Age Range</Label>
+                  <Select
+                    value={formData.ageproduct}
+                    onValueChange={(value) => handleSelectChange('ageproduct', value)}
+                  >
+                    <SelectTrigger className="col-span-3 w-full">
+                      <SelectValue placeholder="Select age range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AGE_RANGE_OPTIONS.map((age) => (
+                        <SelectItem key={age} value={age}>
+                          {age}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="col-span-full">
+                  <div className="bg-blue-50 p-4 rounded-md mt-4">
+                    <h3 className="text-sm font-medium text-blue-800">Product ID Information</h3>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Product ID: {formData.id || 'Not assigned yet'}
+                    </p>
+                  </div>
                 </div>
               </div>
             </TabsContent>
