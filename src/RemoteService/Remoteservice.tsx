@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const remote = {
   // address: 'http://127.0.0.1:8000/api/', // Your backend API URL
-  address: 'https://backendshop-production-0a96.up.railway.app/api/', 
+  address: 'https://backendshop-production-e1ec.up.railway.app/api/', 
 };
 
 const getAccessToken = () => localStorage.getItem("token");
