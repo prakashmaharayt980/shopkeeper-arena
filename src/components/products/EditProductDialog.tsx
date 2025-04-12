@@ -31,11 +31,36 @@ const CATEGORY_OPTIONS = [
   'Shoes', 'Toys', 'Sports', 'Beauty', 'Automotive',
   'Health', 'Jewelry', 'Grocery', 'Stationery', 'Home Decor',
   'Plants', 'Painting', 'Handicraft', 'Kitchenware', 'Pet Supplies',
-  'Book'
+  'Book', 'Garden Supplies', 'Seeds', 'Educational Books', 'Religious Books'
 ] as const;
 
 const GENRE_OPTIONS = [
-  'Fiction', 'Non-fiction', 'Biography', 'History', 'Science', 'Art', 'Other'
+  // Fiction Categories
+  'Fiction', 'Science Fiction', 'Fantasy', 'Mystery', 'Romance', 
+  'Thriller', 'Horror', 'Historical Fiction', 'Literary Fiction',
+  
+  // Non-fiction Categories
+  'Non-fiction', 'Biography', 'Autobiography', 'Self-Help',
+  'Business', 'Technology', 'Science', 'Philosophy', 'Psychology',
+  'History', 'Politics', 'Religion', 'Art', 'Cooking',
+  
+  // Educational
+  'Textbook', 'Reference', 'Academic', 'Children Education',
+  
+  // Children's Books
+  'Children Literature', 'Picture Books', 'Young Adult',
+  
+  // Other
+  'Poetry', 'Drama', 'Comics', 'Manga', 'Other',
+
+
+  'Indoor Plants', 'Outdoor Plants', 'Flowering Plants', 'Succulents',
+  'Cacti', 'Herbs', 'Vegetables', 'Fruit Plants', 'Bonsai',
+  'Air Plants', 'Aquatic Plants', 'Climbing Plants', 'Ground Cover',
+  'Ornamental Plants', 'Medicinal Plants',
+
+  
+
 ] as const;
 
 const RATING_OPTIONS = [
